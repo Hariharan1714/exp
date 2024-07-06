@@ -12,8 +12,8 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const secretKey = 'your_secret_key'; // Replace with your own secret key
 
-const sequelize = new Sequelize('nodejs', 'root', '1718', {
-  host: 'localhost',
+const sequelize = new Sequelize('nodejs', 'admin', 'harrywedshpd', {
+  host: 'database-1.c76uskew0vbg.ap-southeast-2.rds.amazonaws.com',
   dialect: 'mysql'
 });
 
