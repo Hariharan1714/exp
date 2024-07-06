@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        /* Add your CSS styles here */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 20px;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        #expenses {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .expense-item {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-bottom: 1px solid #ccc;
+        }
+        .expense-item button {
+            margin-left: 10px;
+            cursor: pointer;
+        }
+        #premium-status {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        #leaderboard {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #download-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #download-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #download-btn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Expense Tracker</h1>
+
+    <div id="premium-status"></div>
+    
+    <form id="expenseForm">
+        <label for="amount">Amount:</label><br>
+        <input type="number" id="amount" name="amount" required><br>
+        <label for="description">Description:</label><br>
+        <input type="text" id="description" name="description" required><br>
+        <label for="category">Category:</label><br>
+        <input type="text" id="category" name="category" required><br><br>
+        <input type="submit" value="Add Expense">
+    </form>
+
+    
+    <div id="expenses"></div>
+
+    <div id="leaderboard"></div>
+
+    <button id="buyPremiumBtn">Buy Premium</button>
+
+    <button id="download-btn">Download Expenses</button>
+
+
+    
+
+    <script>
+
+                        // Function to add an expense
+                function addExpense(amount, description, category) {
+                    userExpenses.push({ amount, description, category });
+                    saveExpensesToLocal(); // Save expenses after adding a new one
+                    loadExpenses(); // Reload expenses after adding a new one
+                }
+
+                // Function to save expenses to localStorage for the current user
+                function saveExpensesToLocal() {
+                    const currentUser = localStorage.getItem('currentUser');
+                    if (currentUser) {
+                        localStorage.setItem(`userExpenses_${currentUser}`, JSON.stringify(userExpenses));
+                    }
+                }
+
+                // Function to load expenses from localStorage for the current user
+                function loadExpensesFromLocal() {
+                    const currentUser = localStorage.getItem('currentUser');
+                    if (currentUser) {
+                        const savedExpenses = localStorage.getItem(`userExpenses_${currentUser}`);
+                        userExpenses = savedExpenses ? JSON.parse(savedExpenses) : [];
+                    } else {
+                        userExpenses = [];
+                    }
+                }
+
+                // Load expenses from localStorage on page load
+                document.addEventListener('DOMContentLoaded', function() {
+                    const currentUser = localStorage.getItem('currentUser');
+                    if (currentUser) {
+                        loadExpensesFromLocal();
+                        loadExpenses(); // Reload UI with loaded expenses
+                    }
+                });
+
+
+        // Store token
+        let token = localStorage.getItem('token');
+        if (!token) {
+            alert('Please log in first.');
+            window.location.href = '/login';
+        }
+
+        document.getElementById('expenseForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            const amount = document.getElementById('amount').value;
+            const description = document.getElementById('description').value;
+            const category = document.getElementById('category').value;
+
+            addExpense(amount, description, category);
+            loadExpenses();
+
+            try {
+                const response = await fetch('/add-expense', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ amount, description, category })
+                });
+
+                const data = await response.text();
+                if (response.ok) {
+                    alert(data);
+                    loadExpenses(); // Load expenses after adding a new one
+                } else {
+                    alert(data);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error adding expense');
+            }
+        });
+
+        async function loadExpenses() {
+            try {
+                const response = await fetch('/expenses', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                const { expenses, isPremium } = data;
+
+                const expensesDiv = document.getElementById('expenses');
+                const premiumDiv = document.getElementById('premium-status');
+                const leaderboardDiv = document.getElementById('leaderboard');
+                const downloadBtn = document.getElementById('download-btn');
+
+                expensesDiv.innerHTML = '';
+
+                // Show premium user message
+                            if (downloadBtn) { // Add this null check
+                if (isPremium) {
+                    premiumDiv.textContent = 'You are a premium user';
+                    document.getElementById('buyPremiumBtn').style.display = 'none';
+
+                    downloadBtn.style.display = 'inline-block'; // Show download button
+                    loadLeaderboard();
+                } else {
+                    premiumDiv.textContent = '';
+                    downloadBtn.style.display = 'none'; // Hide download button
+                }
+            }
+
+
+                expenses.forEach(expense => {
+                    const expenseItem = document.createElement('div');
+                    expenseItem.classList.add('expense-item');
+                    expenseItem.textContent = `Amount: ${expense.amount}, Description: ${expense.description}, Category: ${expense.category}`;
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.addEventListener('click', async () => {
+                        try {
+                            const res = await fetch(`/delete-expense/${expense.id}`, { 
+                                method: 'DELETE',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                }
+                            });
+                            const message = await res.text();
+                            if (res.ok) {
+                                alert(message);
+                                loadExpenses(); // Reload expenses after deletion
+                            } else {
+                                alert(message);
+                            }
+                        } catch (err) {
+                            console.error('Error:', err);
+                            alert('Error deleting expense');
+                        }
+                    });
+                    expenseItem.appendChild(deleteButton);
+                    expensesDiv.appendChild(expenseItem);
+                });
+            } catch (error) {
+                console.error('Error fetching expenses:', error);
+                alert('Error fetching expenses');
+            }
+        }
+
+        async function loadLeaderboard() {
+            try {
+                const response = await fetch('/leaderboard', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const leaderboard = await response.json();
+                const leaderboardDiv = document.getElementById('leaderboard');
+                leaderboardDiv.innerHTML = '<h3>Leaderboard</h3>';
+
+                leaderboard.forEach(user => {
+                    const userItem = document.createElement('div');
+                    userItem.textContent = `Name: ${user.name}, Total Expense: ${user.totalExpense}`;
+                    leaderboardDiv.appendChild(userItem);
+                });
+            } catch (error) {
+                console.error('Error fetching leaderboard:', error);
+                alert('Error fetching leaderboard');
+            }
+        }
+
+        // Load expenses and leaderboard on page load
+        loadExpenses();
+
+        // Event listener for buy premium button
+        document.getElementById('buyPremiumBtn').addEventListener('click', async function() {
+            try {
+                const response = await fetch('/create-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    const options = {
+                        key: 'rzp_test_oiV0A8uBezexxh', // Razorpay Key ID
+                        amount: data.amount,
+                        currency: data.currency,
+                        name: 'Premium Membership',
+                        description: 'Upgrade to Premium Membership',
+                        order_id: data.orderId,
+                        handler: async function (response) {
+                            try {
+                                const paymentResponse = await fetch('/payment-response', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                                    },
+                                    body: JSON.stringify({
+                                        paymentId: response.razorpay_payment_id,
+                                        orderId: response.razorpay_order_id,
+                                        status: 'success'
+                                    })
+                                });
+
+                                const result = await paymentResponse.json();
+                                alert('Transaction successful');
+                            } catch (error) {
+                                console.error('Error processing payment response:', error);
+                                alert('Error processing payment response');
+                            }
+                        },
+                        prefill: {
+                            email: 'user@example.com',
+                            contact: '9999999999'
+                        },
+                        theme: {
+                            color: '#3399cc'
+                        }
+                    };
+
+                    const rzp1 = new Razorpay(options);
+                    rzp1.open();
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                console.error('Error creating order:', error);
+                alert('Error creating order');
+            }
+        });
+
+  
+// Event listener for download button
+document.getElementById('download-btn').addEventListener('click', async () => {
+    try {
+        const currentUser = localStorage.getItem('currentUser');
+        if (!currentUser) {
+            alert('Please log in first.');
+            return;
+        }
+
+        // Fetch the current user's expenses (from localStorage)
+        loadExpensesFromLocal();
+        const expenses = userExpenses;
+
+        // Construct the file content
+        let fileContent = 'Amount, Description, Category\n';
+        expenses.forEach(expense => {
+            fileContent += `${expense.amount}, ${expense.description}, ${expense.category}\n`;
+        });
+
+        // Create a Blob from the file content
+        const blob = new Blob([fileContent], { type: 'text/plain' });
+
+        // Create a temporary URL for the Blob
+        const url = window.URL.createObjectURL(blob);
+
+        // Create an anchor element and simulate click to trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'expenses.txt';
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up: remove the temporary URL and anchor element
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+    } catch (error) {
+        console.error('Error downloading expenses:', error);
+        alert('Error downloading expenses');
+    }
+});
+
+    </script>
+
+</body>
+</html>
